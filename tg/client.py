@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
 
-from telethon import TelegramClient, errors, functions
+from telethon import TelegramClient
 
 from tg.config import cfg
+from tg.retry import with_flood_retry
 
 log = logging.getLogger(__name__)
-
-_MAX_RETRIES = 4
 
 
 class TelegramTestClient:
@@ -41,28 +39,17 @@ class TelegramTestClient:
     # Rate-limited request helper
     # ------------------------------------------------------------------
 
-    async def __call__(self, request: Any, *, retries: int = _MAX_RETRIES) -> Any:
+    async def __call__(self, request: Any, *, retries: int = 4) -> Any:
         """Execute a raw Telethon *request* with automatic flood-wait retry.
 
         Usage::
 
             result = await tc(functions.messages.GetBotCallbackAnswerRequest(...))
         """
-        for attempt in range(1, retries + 1):
-            try:
-                return await self._client(request)
-            except errors.FloodWaitError as exc:
-                wait = max(exc.seconds, cfg.rate_limit_pause)
-                log.warning(
-                    "FloodWait %ds (attempt %d/%d) — sleeping…",
-                    wait,
-                    attempt,
-                    retries,
-                )
-                await asyncio.sleep(wait)
-        raise errors.FloodWaitError(
-            request=request,
-            capture=0,
+        return await with_flood_retry(
+            lambda: self._client(request),
+            retries=retries,
+            label="raw_request",
         )
 
     # ------------------------------------------------------------------
@@ -70,14 +57,18 @@ class TelegramTestClient:
     # ------------------------------------------------------------------
 
     async def send(self, entity: Any, text: str, **kwargs: Any) -> Any:
-        for attempt in range(1, _MAX_RETRIES + 1):
-            try:
-                return await self._client.send_message(entity, text, **kwargs)
-            except errors.FloodWaitError as exc:
-                wait = max(exc.seconds, cfg.rate_limit_pause)
-                log.warning("FloodWait on send (%ds, attempt %d)", wait, attempt)
-                await asyncio.sleep(wait)
-        raise errors.FloodWaitError(request=None, capture=0)
+        """Send a text message with automatic flood-wait retry."""
+        return await with_flood_retry(
+            lambda: self._client.send_message(entity, text, **kwargs),
+            label="send_message",
+        )
+
+    async def send_file(self, entity: Any, file: Any, **kwargs: Any) -> Any:
+        """Send a file/photo with automatic flood-wait retry."""
+        return await with_flood_retry(
+            lambda: self._client.send_file(entity, file, **kwargs),
+            label="send_file",
+        )
 
     # ------------------------------------------------------------------
     # Direct access to underlying client
