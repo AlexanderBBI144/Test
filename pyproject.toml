@@ -1,0 +1,21 @@
+[project]
+name = "telegram-bot-tests"
+version = "0.1.0"
+description = "Telethon + pytest framework for Telegram bot testing"
+requires-python = ">=3.11"
+dependencies = [
+    "telethon>=1.36",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "python-dotenv>=1.0",
+    "cryptg>=0.4",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+log_cli = true
+log_cli_level = "INFO"
+markers = [
+    "slow: marks tests that interact with real Telegram API (may be rate-limited)",
+]
