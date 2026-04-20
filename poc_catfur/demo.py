@@ -1,4 +1,4 @@
-"""End-to-end demo: text -> vector -> blob image -> distort -> decode -> text.
+"""End-to-end demo: English text -> blob image -> distort -> decode -> word.
 
 Run:  python3 -m poc_catfur.demo
 """
@@ -9,54 +9,64 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from . import decoder, distort, embed, encoder
-from .corpus import CORPUS
+from . import decoder, distort, encoder, tokenize, vocab
 
 OUT = Path(__file__).parent / "out"
 
 
 def _roundtrip(
-    text: str, bundle: dict, level: str | None
-) -> tuple[str, float, float, list[tuple[str, float]], Image.Image, dict]:
-    v = embed.project(text, bundle)
-    img = encoder.encode(v)
+    text: str, v: np.ndarray, vocab_bundle: dict, level: str | None
+) -> tuple[list[tuple[str, float]], float, Image.Image, dict]:
+    img = encoder.encode(v, vocab_bundle["v_lo"], vocab_bundle["v_hi"])
     if level is not None:
         img = distort.distort(img, seed=abs(hash((text, level))) % 2**32, level=level)
-    v_hat, diag = decoder.decode(img)
-    matches = embed.nearest(v_hat, bundle, k=3)
-    cos_to_orig = float(np.dot(v_hat, v))
-    top_text, top_sim = matches[0]
-    return top_text, top_sim, cos_to_orig, matches, img, diag
+    v_hat, diag = decoder.decode(img, vocab_bundle["v_lo"], vocab_bundle["v_hi"])
+    matches = vocab.lookup(v_hat, vocab_bundle, k=3)
+    cos_orig = float(np.dot(v_hat, v))
+    return matches, cos_orig, img, diag
 
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    print("Building / loading embedding projection...")
-    bundle = embed.load_or_build(CORPUS)
+    print("Loading / building 20k-word English vocabulary...")
+    vb = vocab.load_or_build()
+    print(f"vocab: {len(vb['words'])} words, PCA dim={vocab.DIM}")
+    print()
 
     probes = [
-        "я люблю гусей",
-        "обожаю шоколад",
-        "я ненавижу пауков",
-        "светит солнце",
-        "слушаю тихую музыку",
+        "i love geese",
+        "chocolate is delicious",
+        "i hate spiders",
+        "the sun is shining",
+        "listening to quiet music",
+        "the train is late",
+        "mountains are beautiful",
+        "she writes a long letter",
     ]
 
     levels = [None, "light", "medium", "heavy"]
 
-    print()
-    header = f"{'phrase':<28} {'level':<7} {'cos(orig)':<10} {'top match':<30} {'sim'}"
-    print(header)
-    print("-" * len(header))
+    print(f"{'phrase':<32} {'level':<7} {'cos':<7} {'top-3 decoded words'}")
+    print("-" * 96)
 
     for text in probes:
+        norm = tokenize.normalize(text)
+        toks = tokenize.subword_tokens(text)
+        wrds = tokenize.words(text)
+        print(f"\ninput:       {text!r}")
+        print(f"normalized:  {norm!r}")
+        print(f"subwords:    {toks}")
+        print(f"words:       {wrds}")
+
+        v = vocab.project(norm, vb)
+
         for level in levels:
-            top_text, top_sim, cos_orig, matches, img, diag = _roundtrip(text, bundle, level)
+            matches, cos_orig, img, diag = _roundtrip(norm, v, vb, level)
             tag = level or "clean"
-            safe = text.replace(" ", "_")[:25]
+            safe = "".join(c if c.isalnum() else "_" for c in norm)[:30]
             img.save(OUT / f"{safe}__{tag}.png")
-            print(f"{text:<28} {tag:<7} {cos_orig:>8.3f}   {top_text:<30} {top_sim:.3f}")
-        print()
+            top3 = ", ".join(f"{w}({s:.2f})" for w, s in matches)
+            print(f"  {tag:<7} cos={cos_orig:.3f}  {top3}")
 
 
 if __name__ == "__main__":
