@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>cat-fur codec — playground</title>
+<style>
+  :root {
+    --fg: #1a1a1a;
+    --muted: #6b6b6b;
+    --bg: #f6f4ee;
+    --panel: #ffffff;
+    --border: #e0dcd2;
+    --accent: #222;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font: 14px/1.5 -apple-system, Inter, system-ui, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    margin: 0;
+    padding: 24px;
+  }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin-bottom: 20px; font-size: 13px; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  .row { display: flex; gap: 20px; align-items: flex-start; }
+  .col { flex: 1; min-width: 0; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  label { font-weight: 500; display: block; margin-bottom: 6px; font-size: 13px; }
+  input[type=text], select {
+    width: 100%;
+    font: inherit;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: white;
+  }
+  .controls { display: flex; gap: 10px; align-items: end; margin-top: 10px; }
+  .controls > div { flex: 1; }
+  .controls > div:last-child { flex: 0; }
+  button {
+    font: inherit;
+    padding: 9px 14px;
+    border: 1px solid var(--fg);
+    background: var(--fg);
+    color: white;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button.secondary { background: white; color: var(--fg); }
+  button:disabled { opacity: 0.5; cursor: wait; }
+  img.pattern {
+    width: 100%;
+    max-width: 420px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    display: block;
+  }
+  .caption { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .matches { margin-top: 10px; }
+  .match-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dotted var(--border); }
+  .match-row:first-child { font-weight: 600; }
+  .bar {
+    height: 6px;
+    background: var(--accent);
+    border-radius: 3px;
+    margin-top: 2px;
+  }
+  .bar-wrap { flex: 1; margin-left: 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip {
+    background: #eee7d8;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-family: ui-monospace, Menlo, monospace;
+  }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .err { color: #a33; }
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    text-align: center;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .dropzone.drag { border-color: var(--fg); color: var(--fg); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>cat-fur codec</h1>
+  <div class="sub">
+    text → 384-d MiniLM embedding → 24-d PCA → black blobs → (distortion) → decoder → nearest English word (vocab size: 20 000)
+  </div>
+
+  <div class="panel">
+    <label for="text">message</label>
+    <input id="text" type="text" value="i love geese" autofocus>
+    <div class="controls">
+      <div>
+        <label for="level">channel distortion</label>
+        <select id="level">
+          <option value="">clean</option>
+          <option value="light">light</option>
+          <option value="medium" selected>medium</option>
+          <option value="heavy">heavy</option>
+        </select>
+      </div>
+      <div>
+        <label for="seed">seed</label>
+        <input id="seed" type="text" value="0" style="width: 80px">
+      </div>
+      <div style="flex: 0">
+        <button id="go">encode & decode</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="result" style="display:none; margin-top: 20px">
+    <div class="row">
+      <div class="col panel">
+        <label>clean print (what you'd put on the t-shirt)</label>
+        <img id="cleanImg" class="pattern" alt="">
+      </div>
+      <div class="col panel">
+        <label>what the decoder sees (after the channel)</label>
+        <img id="channelImg" class="pattern" alt="">
+      </div>
+    </div>
+    <div class="row" style="margin-top: 20px">
+      <div class="col panel">
+        <label>tokenizer</label>
+        <div class="caption">normalized</div>
+        <div id="normalized" style="font-family: ui-monospace, Menlo, monospace"></div>
+        <div class="caption" style="margin-top: 8px">subwords</div>
+        <div id="subwords" class="chips"></div>
+        <div class="caption" style="margin-top: 8px">words</div>
+        <div id="words" class="chips"></div>
+        <div class="kv" id="kv"></div>
+      </div>
+      <div class="col panel">
+        <label>decoded top-8</label>
+        <div id="matches" class="matches"></div>
+      </div>
+    </div>
+  </div>
+
+  <hr>
+
+  <div class="panel">
+    <label>upload a real photo of a printed pattern</label>
+    <div id="drop" class="dropzone">click or drag an image here</div>
+    <input id="file" type="file" accept="image/*" style="display:none">
+    <div id="uploadResult" style="display:none; margin-top: 14px">
+      <div class="row">
+        <div class="col">
+          <img id="uploadedImg" class="pattern" alt="">
+        </div>
+        <div class="col">
+          <label>decoded top-10</label>
+          <div id="uploadMatches" class="matches"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function renderMatches(container, matches, maxSim) {
+  container.innerHTML = "";
+  const max = maxSim || Math.max(...matches.map(m => m.sim), 1e-6);
+  for (const m of matches) {
+    const row = document.createElement("div");
+    row.className = "match-row";
+    const label = document.createElement("div");
+    label.textContent = m.word;
+    const barWrap = document.createElement("div");
+    barWrap.className = "bar-wrap";
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    bar.style.width = Math.max(2, 100 * m.sim / max) + "%";
+    const score = document.createElement("div");
+    score.textContent = m.sim.toFixed(3);
+    score.style.minWidth = "48px";
+    score.style.textAlign = "right";
+    score.style.color = "var(--muted)";
+    score.style.fontFamily = "ui-monospace, Menlo, monospace";
+    score.style.fontSize = "12px";
+    barWrap.appendChild(bar);
+    row.appendChild(label);
+    row.appendChild(barWrap);
+    row.appendChild(score);
+    container.appendChild(row);
+  }
+}
+
+function renderChips(container, items) {
+  container.innerHTML = "";
+  for (const t of items) {
+    const c = document.createElement("span");
+    c.className = "chip";
+    c.textContent = t;
+    container.appendChild(c);
+  }
+}
+
+async function runRoundtrip() {
+  const btn = $("go");
+  btn.disabled = true;
+  btn.textContent = "working...";
+  try {
+    const resp = await fetch("/api/roundtrip", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        text: $("text").value,
+        level: $("level").value,
+        seed: $("seed").value,
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "server error");
+    $("result").style.display = "";
+    $("cleanImg").src = data.clean_png;
+    $("channelImg").src = data.channel_png;
+    $("normalized").textContent = data.normalized;
+    renderChips($("subwords"), data.subwords);
+    renderChips($("words"), data.words);
+    if (data.ok) {
+      renderMatches($("matches"), data.matches);
+    } else {
+      $("matches").innerHTML = '<div class="err">decode failed: ' + (data.error || "") + '</div>';
+    }
+    const kv = $("kv");
+    kv.innerHTML = "";
+    const rows = [
+      ["cos(decoded, original)", data.cos_to_original.toFixed(3)],
+      ["blobs detected", data.n_blobs ?? "—"],
+      ["channel level", data.level || "clean"],
+      ["elapsed", data.elapsed_ms + " ms"],
+    ];
+    for (const [k, v] of rows) {
+      const kd = document.createElement("div"); kd.textContent = k;
+      const vd = document.createElement("div"); vd.textContent = v;
+      vd.style.fontFamily = "ui-monospace, Menlo, monospace";
+      kv.appendChild(kd); kv.appendChild(vd);
+    }
+  } catch (e) {
+    alert("error: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "encode & decode";
+  }
+}
+
+$("go").addEventListener("click", runRoundtrip);
+$("text").addEventListener("keydown", (e) => { if (e.key === "Enter") runRoundtrip(); });
+
+const drop = $("drop");
+const file = $("file");
+drop.addEventListener("click", () => file.click());
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("drag"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+drop.addEventListener("drop", (e) => {
+  e.preventDefault();
+  drop.classList.remove("drag");
+  if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]);
+});
+file.addEventListener("change", () => {
+  if (file.files.length) uploadFile(file.files[0]);
+});
+
+async function uploadFile(f) {
+  drop.textContent = "decoding " + f.name + "...";
+  const fd = new FormData();
+  fd.append("image", f);
+  try {
+    const resp = await fetch("/api/decode", { method: "POST", body: fd });
+    const data = await resp.json();
+    $("uploadResult").style.display = "";
+    $("uploadedImg").src = data.uploaded_png || "";
+    if (data.ok) {
+      renderMatches($("uploadMatches"), data.matches);
+    } else {
+      $("uploadMatches").innerHTML = '<div class="err">' + (data.error || "decode failed") + '</div>';
+    }
+  } catch (e) {
+    alert("error: " + e.message);
+  } finally {
+    drop.textContent = "click or drag an image here";
+  }
+}
+
+// Auto-run on load so the first paint shows something useful.
+runRoundtrip();
+</script>
+</body>
+</html>
