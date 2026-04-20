@@ -1,7 +1,0 @@
-numpy
-scipy
-Pillow
-scikit-learn
-sentence-transformers
-wordfreq
-flask

@@ -8,7 +8,7 @@ Endpoints:
                            words from the decoder.
 
 Run:
-    python3 -m poc_catfur.web
+    uv run --extra poc python -m poc_catfur.web
 """
 from __future__ import annotations
 

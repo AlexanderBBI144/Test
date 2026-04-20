@@ -1,6 +1,6 @@
 """End-to-end demo: English text -> blob image -> distort -> decode -> word.
 
-Run:  python3 -m poc_catfur.demo
+Run:  uv run --extra poc python -m poc_catfur.demo
 """
 from __future__ import annotations
 

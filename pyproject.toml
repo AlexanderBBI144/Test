@@ -14,12 +14,20 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.25",
 ]
+poc = [
+    "numpy>=2.0",
+    "scipy>=1.13",
+    "Pillow>=10.0",
+    "scikit-learn>=1.4",
+    "sentence-transformers>=3.0",
+    "wordfreq>=3.0",
+    "flask>=3.0",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
 
-[build-system]
-requires = ["setuptools>=75"]
-build-backend = "setuptools.backends._legacy:_Backend"
+[tool.uv]
+package = false

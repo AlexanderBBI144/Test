@@ -7,3 +7,4 @@ __pycache__/
 dist/
 *.egg-info/
 poc_catfur/.cache/
+.venv/
