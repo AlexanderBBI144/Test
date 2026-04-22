@@ -2,391 +2,130 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>cat-fur codec — playground</title>
+<title>shape codec</title>
 <style>
-  :root {
-    --fg: #1a1a1a;
-    --muted: #6b6b6b;
-    --bg: #f6f4ee;
-    --panel: #ffffff;
-    --border: #e0dcd2;
-    --accent: #222;
-  }
+  :root { --navy: #0E142C; --cyan: #1FD9FE; --bg: #f6f4ee; --border: #e0dcd2; --muted: #6b6b6b; }
   * { box-sizing: border-box; }
-  body {
-    font: 14px/1.5 -apple-system, Inter, system-ui, sans-serif;
-    color: var(--fg);
-    background: var(--bg);
-    margin: 0;
-    padding: 24px;
-  }
+  body { font: 14px/1.5 -apple-system, Inter, system-ui, sans-serif; background: var(--bg); margin: 0; padding: 24px; }
+  .wrap { max-width: 860px; margin: 0 auto; }
   h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
-  .sub { color: var(--muted); margin-bottom: 20px; font-size: 13px; }
-  .wrap { max-width: 1080px; margin: 0 auto; }
-  .row { display: flex; gap: 20px; align-items: flex-start; }
-  .col { flex: 1; min-width: 0; }
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px;
-  }
+  .sub { color: var(--muted); margin-bottom: 28px; font-size: 13px; }
+  .panel { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
   label { font-weight: 500; display: block; margin-bottom: 6px; font-size: 13px; }
-  input[type=text], select {
-    width: 100%;
-    font: inherit;
-    padding: 8px 10px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: white;
-  }
-  .controls { display: flex; gap: 10px; align-items: end; margin-top: 10px; }
-  .controls > div { flex: 1; }
-  .controls > div:last-child { flex: 0; }
+  input[type=text] { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; }
+  .row { display: flex; gap: 12px; margin-top: 10px; align-items: flex-end; }
   button {
-    font: inherit;
-    padding: 9px 14px;
-    border: 1px solid var(--fg);
-    background: var(--fg);
-    color: white;
-    border-radius: 6px;
-    cursor: pointer;
+    font: inherit; padding: 9px 16px; border: none;
+    background: var(--navy); color: var(--cyan);
+    border-radius: 6px; cursor: pointer; white-space: nowrap;
   }
-  button.secondary { background: white; color: var(--fg); }
   button:disabled { opacity: 0.5; cursor: wait; }
-  img.pattern {
-    width: 100%;
-    max-width: 420px;
-    background: white;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    display: block;
-  }
-  .caption { font-size: 12px; color: var(--muted); margin-top: 4px; }
-  .matches { margin-top: 10px; }
-  .match-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dotted var(--border); }
-  .match-row:first-child { font-weight: 600; }
-  .bar {
-    height: 6px;
-    background: var(--accent);
-    border-radius: 3px;
-    margin-top: 2px;
-  }
-  .bar-wrap { flex: 1; margin-left: 12px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .chip {
-    background: #eee7d8;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-family: ui-monospace, Menlo, monospace;
-  }
-  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 12px; color: var(--muted); margin-top: 8px; }
-  .err { color: #a33; }
   .dropzone {
-    border: 2px dashed var(--border);
-    border-radius: 8px;
-    padding: 24px;
-    text-align: center;
-    color: var(--muted);
-    cursor: pointer;
+    border: 2px dashed var(--border); border-radius: 8px;
+    padding: 28px; text-align: center; color: var(--muted); cursor: pointer; margin-top: 10px;
   }
-  .dropzone.drag { border-color: var(--fg); color: var(--fg); }
-  hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+  .dropzone.drag { border-color: var(--navy); color: var(--navy); }
+  .preview { margin-top: 16px; }
+  .preview img { max-width: 100%; border-radius: 6px; border: 1px solid var(--border); display: block; }
+  a.dl { display: inline-block; margin-top: 8px; font-size: 13px; color: var(--navy); }
+  ol.phrases { margin: 12px 0 0; padding-left: 20px; line-height: 2; }
+  ol.phrases li:first-child { font-weight: 600; }
+  .err { color: #a33; margin-top: 8px; font-size: 13px; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--cyan); border-top-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; margin-right: 6px; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>cat-fur codec</h1>
-  <div class="sub">
-    text → OpenAI text-embedding-3-large @ 24-d (native Matryoshka truncation) → black blobs → (distortion) → decoder → nearest phrase in bank
-  </div>
+  <h1>shape codec</h1>
+  <div class="sub">phrase → ada-002 → printed pattern → photo → vec2text → top-10 phrases</div>
 
   <div class="panel">
-    <label for="text">message</label>
-    <input id="text" type="text" value="i love geese" autofocus>
-    <div class="controls">
-      <div>
-        <label for="level">channel distortion</label>
-        <select id="level">
-          <option value="">clean</option>
-          <option value="light">light</option>
-          <option value="medium" selected>medium</option>
-          <option value="heavy">heavy</option>
-        </select>
-      </div>
-      <div>
-        <label for="seed">seed</label>
-        <input id="seed" type="text" value="0" style="width: 80px">
-      </div>
-      <div style="flex: 0">
-        <button id="go">encode & decode</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="result" style="display:none; margin-top: 20px">
+    <label for="shapeText">phrase to encode</label>
     <div class="row">
-      <div class="col panel">
-        <label>clean print (what you'd put on the t-shirt)</label>
-        <img id="cleanImg" class="pattern" alt="">
-      </div>
-      <div class="col panel">
-        <label>what the decoder sees (after the channel)</label>
-        <img id="channelImg" class="pattern" alt="">
-      </div>
+      <input id="shapeText" type="text" value="i love geese" autofocus style="flex:1">
+      <button id="encodeBtn">generate SVG</button>
     </div>
-    <div class="row" style="margin-top: 20px">
-      <div class="col panel">
-        <label>tokenizer</label>
-        <div class="caption">normalized</div>
-        <div id="normalized" style="font-family: ui-monospace, Menlo, monospace"></div>
-        <div class="caption" style="margin-top: 8px">subwords</div>
-        <div id="subwords" class="chips"></div>
-        <div class="caption" style="margin-top: 8px">words</div>
-        <div id="words" class="chips"></div>
-        <div class="kv" id="kv"></div>
-      </div>
-      <div class="col panel">
-        <label>decoded top-10 phrases</label>
-        <div id="phraseMatches" class="matches"></div>
-      </div>
+    <div id="encodeResult" class="preview" style="display:none">
+      <img id="svgPreview" alt="pattern preview">
+      <a id="svgDownload" class="dl" download="pattern.svg">↓ download SVG</a>
     </div>
-  </div>
-
-  <hr>
-
-  <div class="panel">
-    <label>upload a real photo of a printed pattern</label>
-    <div id="drop" class="dropzone">click or drag an image here</div>
-    <input id="file" type="file" accept="image/*" style="display:none">
-    <div id="uploadResult" style="display:none; margin-top: 14px">
-      <div class="row">
-        <div class="col">
-          <img id="uploadedImg" class="pattern" alt="">
-        </div>
-        <div class="col">
-          <label>decoded top-10 phrases</label>
-          <div id="uploadPhraseMatches" class="matches"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <hr>
-  <h2 style="font-size:16px;font-weight:600;margin:0 0 16px">shape codec</h2>
-
-  <div class="panel" style="margin-bottom:20px">
-    <label for="shapeText">phrase to encode on t-shirt</label>
-    <input id="shapeText" type="text" value="i love geese" autofocus>
-    <div class="controls" style="margin-top:10px">
-      <div style="flex:0"><button id="shapeEncode">generate SVG</button></div>
-    </div>
-    <div id="shapeEncodeResult" style="display:none;margin-top:16px">
-      <div class="row" style="align-items:flex-start;gap:20px">
-        <div>
-          <img id="shapeSvgPreview" style="max-width:320px;border:1px solid var(--border);border-radius:6px;display:block" alt="">
-          <a id="shapeSvgDownload" download="pattern.svg" style="display:inline-block;margin-top:8px;font-size:13px">download SVG</a>
-        </div>
-      </div>
-    </div>
+    <div id="encodeErr" class="err" style="display:none"></div>
   </div>
 
   <div class="panel">
-    <label>decode t-shirt photo → top-10 phrases (vec2text)</label>
-    <div id="shapeDrop" class="dropzone">click or drag a shirt photo here</div>
-    <input id="shapeFile" type="file" accept="image/*" style="display:none">
-    <div id="shapeDecodeResult" style="display:none;margin-top:14px">
-      <label>top phrases</label>
-      <ol id="shapePhraseList" style="margin:8px 0 0;padding-left:20px;font-size:14px;line-height:1.8"></ol>
-      <div id="shapeDecodeError" class="err" style="display:none"></div>
+    <label>decode shirt photo</label>
+    <div id="drop" class="dropzone">click or drag a photo here</div>
+    <input id="fileInput" type="file" accept="image/*" style="display:none">
+    <div id="decodeResult" style="display:none; margin-top:14px">
+      <label>top-10 phrases</label>
+      <ol id="phraseList" class="phrases"></ol>
     </div>
+    <div id="decodeErr" class="err" style="display:none"></div>
   </div>
 </div>
 
 <script>
-const $ = (id) => document.getElementById(id);
+const $ = id => document.getElementById(id);
 
-function renderMatches(container, matches, maxSim) {
-  container.innerHTML = "";
-  const max = maxSim || Math.max(...matches.map(m => m.sim), 1e-6);
-  for (const m of matches) {
-    const row = document.createElement("div");
-    row.className = "match-row";
-    const label = document.createElement("div");
-    label.textContent = m.word || m.phrase;
-    const barWrap = document.createElement("div");
-    barWrap.className = "bar-wrap";
-    const bar = document.createElement("div");
-    bar.className = "bar";
-    bar.style.width = Math.max(2, 100 * m.sim / max) + "%";
-    const score = document.createElement("div");
-    score.textContent = m.sim.toFixed(3);
-    score.style.minWidth = "48px";
-    score.style.textAlign = "right";
-    score.style.color = "var(--muted)";
-    score.style.fontFamily = "ui-monospace, Menlo, monospace";
-    score.style.fontSize = "12px";
-    barWrap.appendChild(bar);
-    row.appendChild(label);
-    row.appendChild(barWrap);
-    row.appendChild(score);
-    container.appendChild(row);
-  }
-}
-
-function renderChips(container, items) {
-  container.innerHTML = "";
-  for (const t of items) {
-    const c = document.createElement("span");
-    c.className = "chip";
-    c.textContent = t;
-    container.appendChild(c);
-  }
-}
-
-async function runRoundtrip() {
-  const btn = $("go");
+$("encodeBtn").addEventListener("click", async () => {
+  const btn = $("encodeBtn");
   btn.disabled = true;
-  btn.textContent = "working...";
+  btn.innerHTML = '<span class="spinner"></span>encoding…';
+  $("encodeErr").style.display = "none";
   try {
-    const resp = await fetch("/api/roundtrip", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        text: $("text").value,
-        level: $("level").value,
-        seed: $("seed").value,
-      }),
-    });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || "server error");
-    $("result").style.display = "";
-    $("cleanImg").src = data.clean_png;
-    $("channelImg").src = data.channel_png;
-    $("normalized").textContent = data.normalized;
-    renderChips($("subwords"), data.subwords);
-    renderChips($("words"), data.words);
-    if (data.ok) {
-      renderMatches($("phraseMatches"), data.phrase_matches || []);
-    } else {
-      $("phraseMatches").innerHTML = '<div class="err">decode failed: ' + (data.error || "") + '</div>';
-    }
-    const kv = $("kv");
-    kv.innerHTML = "";
-    const rows = [
-      ["cos(decoded, original)", data.cos_to_original.toFixed(3)],
-      ["blobs detected", data.n_blobs ?? "—"],
-      ["channel level", data.level || "clean"],
-      ["elapsed", data.elapsed_ms + " ms"],
-    ];
-    for (const [k, v] of rows) {
-      const kd = document.createElement("div"); kd.textContent = k;
-      const vd = document.createElement("div"); vd.textContent = v;
-      vd.style.fontFamily = "ui-monospace, Menlo, monospace";
-      kv.appendChild(kd); kv.appendChild(vd);
-    }
-  } catch (e) {
-    alert("error: " + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "encode & decode";
-  }
-}
-
-$("go").addEventListener("click", runRoundtrip);
-$("text").addEventListener("keydown", (e) => { if (e.key === "Enter") runRoundtrip(); });
-
-const drop = $("drop");
-const file = $("file");
-drop.addEventListener("click", () => file.click());
-drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("drag"); });
-drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
-drop.addEventListener("drop", (e) => {
-  e.preventDefault();
-  drop.classList.remove("drag");
-  if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]);
-});
-file.addEventListener("change", () => {
-  if (file.files.length) uploadFile(file.files[0]);
-});
-
-async function uploadFile(f) {
-  drop.textContent = "decoding " + f.name + "...";
-  const fd = new FormData();
-  fd.append("image", f);
-  try {
-    const resp = await fetch("/api/decode", { method: "POST", body: fd });
-    const data = await resp.json();
-    $("uploadResult").style.display = "";
-    $("uploadedImg").src = data.uploaded_png || "";
-    if (data.ok) {
-      renderMatches($("uploadPhraseMatches"), data.phrase_matches || []);
-    } else {
-      $("uploadPhraseMatches").innerHTML = '<div class="err">' + (data.error || "decode failed") + '</div>';
-    }
-  } catch (e) {
-    alert("error: " + e.message);
-  } finally {
-    drop.textContent = "click or drag an image here";
-  }
-}
-
-// Auto-run on load so the first paint shows something useful.
-runRoundtrip();
-
-// ── Shape codec ──────────────────────────────────────────────────────────────
-$("shapeEncode").addEventListener("click", async () => {
-  const btn = $("shapeEncode");
-  btn.disabled = true; btn.textContent = "encoding...";
-  try {
-    const resp = await fetch("/api/shape/encode", {
+    const r = await fetch("/api/shape/encode", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({text: $("shapeText").value}),
     });
-    const data = await resp.json();
-    if (!data.ok) throw new Error(data.detail || "encode failed");
-    $("shapeSvgPreview").src = data.svg_b64;
-    const blob = new Blob([data.svg], {type: "image/svg+xml"});
-    $("shapeSvgDownload").href = URL.createObjectURL(blob);
-    $("shapeEncodeResult").style.display = "";
-  } catch(e) { alert("encode error: " + e.message); }
-  finally { btn.disabled = false; btn.textContent = "generate SVG"; }
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.detail || "encode failed");
+    $("svgPreview").src = d.svg_b64;
+    $("svgDownload").href = URL.createObjectURL(new Blob([d.svg], {type: "image/svg+xml"}));
+    $("encodeResult").style.display = "";
+  } catch(e) {
+    $("encodeErr").textContent = e.message;
+    $("encodeErr").style.display = "";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "generate SVG";
+  }
 });
 
-const shapeDrop = $("shapeDrop");
-const shapeFile = $("shapeFile");
-shapeDrop.addEventListener("click", () => shapeFile.click());
-shapeDrop.addEventListener("dragover", (e) => { e.preventDefault(); shapeDrop.classList.add("drag"); });
-shapeDrop.addEventListener("dragleave", () => shapeDrop.classList.remove("drag"));
-shapeDrop.addEventListener("drop", (e) => {
-  e.preventDefault(); shapeDrop.classList.remove("drag");
-  if (e.dataTransfer.files.length) decodeShapePhoto(e.dataTransfer.files[0]);
-});
-shapeFile.addEventListener("change", () => { if (shapeFile.files.length) decodeShapePhoto(shapeFile.files[0]); });
+$("shapeText").addEventListener("keydown", e => { if (e.key === "Enter") $("encodeBtn").click(); });
 
-async function decodeShapePhoto(f) {
-  shapeDrop.textContent = "decoding " + f.name + "...";
-  const fd = new FormData(); fd.append("image", f);
+const drop = $("drop");
+drop.addEventListener("click", () => $("fileInput").click());
+drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("drag"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("drag"); if (e.dataTransfer.files[0]) decode(e.dataTransfer.files[0]); });
+$("fileInput").addEventListener("change", () => { if ($("fileInput").files[0]) decode($("fileInput").files[0]); });
+
+async function decode(file) {
+  drop.innerHTML = '<span class="spinner"></span>decoding…';
+  $("decodeErr").style.display = "none";
+  $("decodeResult").style.display = "none";
+  const fd = new FormData();
+  fd.append("image", file);
   try {
-    const resp = await fetch("/api/shape/decode", {method: "POST", body: fd});
-    const data = await resp.json();
-    $("shapeDecodeResult").style.display = "";
-    if (data.ok) {
-      $("shapeDecodeError").style.display = "none";
-      const ol = $("shapePhraseList");
+    const r = await fetch("/api/shape/decode", {method: "POST", body: fd});
+    const d = await r.json();
+    if (d.ok) {
+      const ol = $("phraseList");
       ol.innerHTML = "";
-      for (const p of data.phrases) {
-        const li = document.createElement("li"); li.textContent = p; ol.appendChild(li);
-      }
+      for (const p of d.phrases) { const li = document.createElement("li"); li.textContent = p; ol.appendChild(li); }
+      $("decodeResult").style.display = "";
     } else {
-      $("shapePhraseList").innerHTML = "";
-      $("shapeDecodeError").textContent = data.error || "decode failed";
-      $("shapeDecodeError").style.display = "";
+      $("decodeErr").textContent = d.error || "decode failed";
+      $("decodeErr").style.display = "";
     }
-  } catch(e) { alert("decode error: " + e.message); }
-  finally { shapeDrop.textContent = "click or drag a shirt photo here"; }
+  } catch(e) {
+    $("decodeErr").textContent = e.message;
+    $("decodeErr").style.display = "";
+  } finally {
+    drop.textContent = "click or drag a photo here";
+  }
 }
 </script>
 </body>

@@ -1,25 +1,17 @@
 [project]
-name = "tg-bot-tests"
+name = "shape-codec"
 version = "0.1.0"
-description = "Telethon + pytest skeleton for Telegram bot testing"
+description = "Print-robust embedding codec for t-shirts"
 requires-python = ">=3.11"
-dependencies = [
-    "telethon>=1.37",
-    "cryptg>=0.4",
-    "python-dotenv>=1.0",
-]
+dependencies = []
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=8.0",
-    "pytest-asyncio>=0.25",
-]
 poc = [
     "numpy>=2.0",
     "scipy>=1.13",
     "Pillow>=10.0",
     "openai>=1.40",
-    "tiktoken>=0.7",
+    "python-dotenv>=1.0",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "python-multipart>=0.0.9",
@@ -33,11 +25,6 @@ invert = [
     "sentence-transformers>=3.0",
     "datasets>=2.18",
 ]
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
-filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.uv]
 package = false
