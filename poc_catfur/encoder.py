@@ -10,7 +10,6 @@ decoder takes the median so any one blob can be lost without harming the
 reconstruction. The mapping from value to area is linear, calibrated per
 component from the vocab's observed (v_lo, v_hi) percentiles.
 """
-from __future__ import annotations
 
 import numpy as np
 from PIL import Image, ImageDraw

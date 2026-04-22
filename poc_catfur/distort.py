@@ -3,7 +3,6 @@ blur, lighting, sensor noise and JPEG compression.
 
 These are the nuisances the decoder has to be robust against.
 """
-from __future__ import annotations
 
 import io
 

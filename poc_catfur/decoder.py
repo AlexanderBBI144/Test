@@ -10,9 +10,8 @@ Pipeline:
   7. Group into DIM bins of REDUNDANCY blobs; median per bin.
   8. Invert the (per-dim) area-to-value map; L2-normalise.
 
-The returned vector is passed to `vocab.lookup` separately.
+The returned vector is passed to `vocab.lookup_phrases` separately.
 """
-from __future__ import annotations
 
 import numpy as np
 from PIL import Image

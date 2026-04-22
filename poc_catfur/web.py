@@ -1,125 +1,126 @@
-"""Tiny Flask playground for the cat-fur encoder.
+"""FastAPI playground for the cat-fur encoder.
 
 Endpoints:
-  GET  /                 — single-page UI.
-  POST /api/roundtrip    — {text, level} -> encoded PNG + (optionally
-                           distorted) PNG + decoded top-k words.
-  POST /api/decode       — multipart upload of a photograph -> top-k
-                           words from the decoder.
+  GET  /                 single-page UI.
+  POST /api/roundtrip    {text, level, seed} -> PNGs + decoded phrases.
+  POST /api/decode       multipart upload -> decoded phrases.
 
 Run:
     uv run --extra poc python -m poc_catfur.web
 """
-from __future__ import annotations
 
 import base64
 import io
+import os
 import time
+from functools import cache
+from pathlib import Path
 
 import numpy as np
-from flask import Flask, jsonify, render_template, request
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import HTMLResponse
 from PIL import Image
+from pydantic import BaseModel
 
 from . import decoder, distort, encoder, tokenize, vocab
 
-app = Flask(__name__, template_folder="templates", static_folder="static")
+INDEX_HTML = (Path(__file__).parent / "templates" / "index.html").read_text(encoding="utf-8")
 
-_vocab = None
-
-
-def vocab_bundle():
-    global _vocab
-    if _vocab is None:
-        _vocab = vocab.load_or_build()
-    return _vocab
+app = FastAPI(title="cat-fur codec")
 
 
-def _png_b64(img: Image.Image) -> str:
+@cache
+def vocab_bundle() -> dict:
+    return vocab.load_or_build()
+
+
+def png_b64(img: Image.Image) -> str:
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
 
-@app.route("/")
-def index():
-    return render_template("index.html")
+def phrase_list(v: np.ndarray, vb: dict, k: int = 10) -> list[dict]:
+    return [{"phrase": p, "sim": s} for p, s in vocab.lookup_phrases(v, vb, k=k)]
 
 
-@app.route("/api/roundtrip", methods=["POST"])
-def api_roundtrip():
-    data = request.get_json(force=True)
-    text = (data.get("text") or "").strip()
-    level = data.get("level") or None
-    seed = int(data.get("seed", 0))
+class RoundtripRequest(BaseModel):
+    text: str
+    level: str | None = None
+    seed: int = 0
+
+
+@app.get("/", response_class=HTMLResponse)
+def index() -> str:
+    return INDEX_HTML
+
+
+@app.post("/api/roundtrip")
+def api_roundtrip(req: RoundtripRequest) -> dict:
+    text = req.text.strip()
     if not text:
-        return jsonify(error="empty text"), 400
+        raise HTTPException(400, "empty text")
 
     vb = vocab_bundle()
     t0 = time.time()
     norm = tokenize.normalize(text)
-    subwords = tokenize.subword_tokens(text)
-    words = tokenize.words(text)
     v = vocab.project(norm, vb)
 
-    clean_img = encoder.encode(v, vb["v_lo"], vb["v_hi"])
-    channel_img = clean_img if not level else distort.distort(clean_img, seed=seed, level=level)
+    clean = encoder.encode(v, vb["v_lo"], vb["v_hi"])
+    channel = distort.distort(clean, seed=req.seed, level=req.level) if req.level else clean
 
+    resp = {
+        "ok": True,
+        "error": None,
+        "normalized": norm,
+        "subwords": tokenize.subword_tokens(text),
+        "words": tokenize.words(text),
+        "level": req.level,
+        "clean_png": png_b64(clean),
+        "channel_png": png_b64(channel),
+        "phrase_matches": [],
+        "cos_to_original": 0.0,
+        "n_blobs": None,
+    }
     try:
-        v_hat, diag = decoder.decode(channel_img, vb["v_lo"], vb["v_hi"])
-        matches = vocab.lookup(v_hat, vb, k=8)
-        cos_orig = float(np.dot(v_hat, v))
-        ok = True
-        err = None
-    except Exception as e:  # decoder can fail on absurd distortions
-        matches = []
-        cos_orig = 0.0
-        ok = False
-        err = str(e)
-        diag = {}
+        v_hat, diag = decoder.decode(channel, vb["v_lo"], vb["v_hi"])
+        resp["phrase_matches"] = phrase_list(v_hat, vb)
+        resp["cos_to_original"] = float(np.dot(v_hat, v))
+        resp["n_blobs"] = diag.get("n_blobs")
+    except Exception as e:
+        resp["ok"] = False
+        resp["error"] = str(e)
 
-    return jsonify(
-        ok=ok,
-        error=err,
-        normalized=norm,
-        subwords=subwords,
-        words=words,
-        level=level,
-        clean_png=_png_b64(clean_img),
-        channel_png=_png_b64(channel_img),
-        matches=[{"word": w, "sim": s} for w, s in matches],
-        cos_to_original=cos_orig,
-        n_blobs=diag.get("n_blobs"),
-        elapsed_ms=int((time.time() - t0) * 1000),
-    )
+    resp["elapsed_ms"] = int((time.time() - t0) * 1000)
+    return resp
 
 
-@app.route("/api/decode", methods=["POST"])
-def api_decode():
-    if "image" not in request.files:
-        return jsonify(error="missing image"), 400
-    img = Image.open(request.files["image"].stream).convert("L")
-    # Normalise to the canonical canvas by resizing square.
+@app.post("/api/decode")
+async def api_decode(image: UploadFile = File(...)) -> dict:
+    img = Image.open(io.BytesIO(await image.read())).convert("L")
     img = img.resize((1400, 1400), Image.BICUBIC)
-
     vb = vocab_bundle()
     try:
         v_hat, diag = decoder.decode(img, vb["v_lo"], vb["v_hi"])
     except Exception as e:
-        return jsonify(ok=False, error=str(e)), 200
-    matches = vocab.lookup(v_hat, vb, k=10)
-    return jsonify(
-        ok=True,
-        matches=[{"word": w, "sim": s} for w, s in matches],
-        n_blobs=diag.get("n_blobs"),
-        uploaded_png=_png_b64(img),
-    )
+        return {"ok": False, "error": str(e)}
+    return {
+        "ok": True,
+        "phrase_matches": phrase_list(v_hat, vb),
+        "n_blobs": diag.get("n_blobs"),
+        "uploaded_png": png_b64(img),
+    }
 
 
 def main() -> None:
+    import uvicorn
+
     print("Warming up vocab...")
     vocab_bundle()
-    print("Ready. Serving at http://127.0.0.1:5000")
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    host = os.environ.get("CATFUR_HOST", "127.0.0.1")
+    port = int(os.environ.get("CATFUR_PORT", "5050"))
+    print(f"Ready. Serving at http://{host}:{port}")
+    uvicorn.run(app, host=host, port=port, log_level="warning")
 
 
 if __name__ == "__main__":

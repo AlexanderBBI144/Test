@@ -18,10 +18,20 @@ poc = [
     "numpy>=2.0",
     "scipy>=1.13",
     "Pillow>=10.0",
-    "scikit-learn>=1.4",
+    "openai>=1.40",
+    "tiktoken>=0.7",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+    "svglib>=1.5",
+    "reportlab>=4.0",
+]
+invert = [
+    "vec2text>=0.0.13",
+    "torch>=2.2",
+    "transformers>=4.40,<5",
     "sentence-transformers>=3.0",
-    "wordfreq>=3.0",
-    "flask>=3.0",
+    "datasets>=2.18",
 ]
 
 [tool.pytest.ini_options]

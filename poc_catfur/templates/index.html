@@ -99,7 +99,7 @@
 <div class="wrap">
   <h1>cat-fur codec</h1>
   <div class="sub">
-    text → 384-d MiniLM embedding → 24-d PCA → black blobs → (distortion) → decoder → nearest English word (vocab size: 20 000)
+    text → OpenAI text-embedding-3-large @ 24-d (native Matryoshka truncation) → black blobs → (distortion) → decoder → nearest phrase in bank
   </div>
 
   <div class="panel">
@@ -148,8 +148,8 @@
         <div class="kv" id="kv"></div>
       </div>
       <div class="col panel">
-        <label>decoded top-8</label>
-        <div id="matches" class="matches"></div>
+        <label>decoded top-10 phrases</label>
+        <div id="phraseMatches" class="matches"></div>
       </div>
     </div>
   </div>
@@ -166,8 +166,8 @@
           <img id="uploadedImg" class="pattern" alt="">
         </div>
         <div class="col">
-          <label>decoded top-10</label>
-          <div id="uploadMatches" class="matches"></div>
+          <label>decoded top-10 phrases</label>
+          <div id="uploadPhraseMatches" class="matches"></div>
         </div>
       </div>
     </div>
@@ -184,7 +184,7 @@ function renderMatches(container, matches, maxSim) {
     const row = document.createElement("div");
     row.className = "match-row";
     const label = document.createElement("div");
-    label.textContent = m.word;
+    label.textContent = m.word || m.phrase;
     const barWrap = document.createElement("div");
     barWrap.className = "bar-wrap";
     const bar = document.createElement("div");
@@ -238,9 +238,9 @@ async function runRoundtrip() {
     renderChips($("subwords"), data.subwords);
     renderChips($("words"), data.words);
     if (data.ok) {
-      renderMatches($("matches"), data.matches);
+      renderMatches($("phraseMatches"), data.phrase_matches || []);
     } else {
-      $("matches").innerHTML = '<div class="err">decode failed: ' + (data.error || "") + '</div>';
+      $("phraseMatches").innerHTML = '<div class="err">decode failed: ' + (data.error || "") + '</div>';
     }
     const kv = $("kv");
     kv.innerHTML = "";
@@ -291,9 +291,9 @@ async function uploadFile(f) {
     $("uploadResult").style.display = "";
     $("uploadedImg").src = data.uploaded_png || "";
     if (data.ok) {
-      renderMatches($("uploadMatches"), data.matches);
+      renderMatches($("uploadPhraseMatches"), data.phrase_matches || []);
     } else {
-      $("uploadMatches").innerHTML = '<div class="err">' + (data.error || "decode failed") + '</div>';
+      $("uploadPhraseMatches").innerHTML = '<div class="err">' + (data.error || "decode failed") + '</div>';
     }
   } catch (e) {
     alert("error: " + e.message);
