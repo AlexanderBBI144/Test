@@ -172,6 +172,36 @@
       </div>
     </div>
   </div>
+
+  <hr>
+  <h2 style="font-size:16px;font-weight:600;margin:0 0 16px">shape codec</h2>
+
+  <div class="panel" style="margin-bottom:20px">
+    <label for="shapeText">phrase to encode on t-shirt</label>
+    <input id="shapeText" type="text" value="i love geese" autofocus>
+    <div class="controls" style="margin-top:10px">
+      <div style="flex:0"><button id="shapeEncode">generate SVG</button></div>
+    </div>
+    <div id="shapeEncodeResult" style="display:none;margin-top:16px">
+      <div class="row" style="align-items:flex-start;gap:20px">
+        <div>
+          <img id="shapeSvgPreview" style="max-width:320px;border:1px solid var(--border);border-radius:6px;display:block" alt="">
+          <a id="shapeSvgDownload" download="pattern.svg" style="display:inline-block;margin-top:8px;font-size:13px">download SVG</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <label>decode t-shirt photo → top-10 phrases (vec2text)</label>
+    <div id="shapeDrop" class="dropzone">click or drag a shirt photo here</div>
+    <input id="shapeFile" type="file" accept="image/*" style="display:none">
+    <div id="shapeDecodeResult" style="display:none;margin-top:14px">
+      <label>top phrases</label>
+      <ol id="shapePhraseList" style="margin:8px 0 0;padding-left:20px;font-size:14px;line-height:1.8"></ol>
+      <div id="shapeDecodeError" class="err" style="display:none"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -304,6 +334,60 @@ async function uploadFile(f) {
 
 // Auto-run on load so the first paint shows something useful.
 runRoundtrip();
+
+// ── Shape codec ──────────────────────────────────────────────────────────────
+$("shapeEncode").addEventListener("click", async () => {
+  const btn = $("shapeEncode");
+  btn.disabled = true; btn.textContent = "encoding...";
+  try {
+    const resp = await fetch("/api/shape/encode", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({text: $("shapeText").value}),
+    });
+    const data = await resp.json();
+    if (!data.ok) throw new Error(data.detail || "encode failed");
+    $("shapeSvgPreview").src = data.svg_b64;
+    const blob = new Blob([data.svg], {type: "image/svg+xml"});
+    $("shapeSvgDownload").href = URL.createObjectURL(blob);
+    $("shapeEncodeResult").style.display = "";
+  } catch(e) { alert("encode error: " + e.message); }
+  finally { btn.disabled = false; btn.textContent = "generate SVG"; }
+});
+
+const shapeDrop = $("shapeDrop");
+const shapeFile = $("shapeFile");
+shapeDrop.addEventListener("click", () => shapeFile.click());
+shapeDrop.addEventListener("dragover", (e) => { e.preventDefault(); shapeDrop.classList.add("drag"); });
+shapeDrop.addEventListener("dragleave", () => shapeDrop.classList.remove("drag"));
+shapeDrop.addEventListener("drop", (e) => {
+  e.preventDefault(); shapeDrop.classList.remove("drag");
+  if (e.dataTransfer.files.length) decodeShapePhoto(e.dataTransfer.files[0]);
+});
+shapeFile.addEventListener("change", () => { if (shapeFile.files.length) decodeShapePhoto(shapeFile.files[0]); });
+
+async function decodeShapePhoto(f) {
+  shapeDrop.textContent = "decoding " + f.name + "...";
+  const fd = new FormData(); fd.append("image", f);
+  try {
+    const resp = await fetch("/api/shape/decode", {method: "POST", body: fd});
+    const data = await resp.json();
+    $("shapeDecodeResult").style.display = "";
+    if (data.ok) {
+      $("shapeDecodeError").style.display = "none";
+      const ol = $("shapePhraseList");
+      ol.innerHTML = "";
+      for (const p of data.phrases) {
+        const li = document.createElement("li"); li.textContent = p; ol.appendChild(li);
+      }
+    } else {
+      $("shapePhraseList").innerHTML = "";
+      $("shapeDecodeError").textContent = data.error || "decode failed";
+      $("shapeDecodeError").style.display = "";
+    }
+  } catch(e) { alert("decode error: " + e.message); }
+  finally { shapeDrop.textContent = "click or drag a shirt photo here"; }
+}
 </script>
 </body>
 </html>

@@ -154,6 +154,30 @@ def _grid() -> tuple[np.ndarray, int, int]:
 _POS, _COLS, _ROWS = _grid()
 
 
+def _compute_data_positions() -> tuple[np.ndarray, np.ndarray]:
+    """Fixed data-cell sub-grid, independent of any encoded vector.
+
+    Returns (_DATA_POS[D, 2], _DATA_PI[D]) where _DATA_PI contains indices
+    into _POS.  Evenly-spaced across all non-fiducial grid positions so the
+    decoder can recompute them from constants alone (no SVG needed).
+    """
+    non_fid = np.array(
+        [pi for pi, (px, py) in enumerate(_POS)
+         if not any(abs(float(px) - cx) <= _FID_HALF and abs(float(py) - cy) <= _FID_HALF
+                    for cx, cy in _FID_CENTERS)],
+        dtype=np.int64,
+    )
+    if len(non_fid) < D:
+        raise RuntimeError(f"Only {len(non_fid)} non-fiducial positions; need ≥ {D}")
+    sel = np.round(np.linspace(0, len(non_fid) - 1, D)).astype(int)
+    data_pi = non_fid[sel]
+    return _POS[data_pi].copy(), data_pi
+
+
+_DATA_POS, _DATA_PI = _compute_data_positions()
+_DATA_PI_SET: frozenset[int] = frozenset(int(p) for p in _DATA_PI)
+
+
 # ── Aesthetic generation ────────────────────────────────────────────────────
 
 def _vector_seed(vector: np.ndarray) -> int:
@@ -307,25 +331,7 @@ def encode(vector: np.ndarray) -> str:
     assert vector.shape == (D,), f"expected ({D},), got {vector.shape}"
 
     grid = _build_grid(vector)
-    all_filled = np.argwhere(grid.reshape(-1) != EMPTY).ravel()
-
-    # Exclude cells whose base position overlaps a fiducial zone.
-    def _in_fid(pi: int) -> bool:
-        px, py = _POS[pi]
-        return any(
-            abs(px - cx) <= _FID_HALF and abs(py - cy) <= _FID_HALF
-            for cx, cy in _FID_CENTERS
-        )
-
-    filled = all_filled[[not _in_fid(int(pi)) for pi in all_filled]]
-    if filled.size < D:
-        raise RuntimeError(f"only {filled.size} filled cells; need ≥ {D}")
-
-    # Data cells: evenly spaced across filled positions so jitter distributes
-    # visually rather than piling up in the top-left.
-    step = filled.size / D
-    data_pi = np.array([filled[int(i * step)] for i in range(D)], dtype=np.int64)
-    data_set = set(data_pi.tolist())
+    flat_grid = grid.reshape(-1)
 
     root = ET.Element(_tag("svg"), {
         "width": str(CANVAS_W), "height": str(CANVAS_H),
@@ -336,7 +342,7 @@ def encode(vector: np.ndarray) -> str:
     })
     _defs(root)
 
-    # Fiducial corner markers: dark ring (outer square + bright centre).
+    # Fiducial corner markers.
     half_o = _FID_OUTER // 2
     half_i = _FID_INNER // 2
     for cx, cy in _FID_CENTERS:
@@ -351,13 +357,8 @@ def encode(vector: np.ndarray) -> str:
             "fill": BG,
         })
 
-    flat_grid = grid.reshape(-1)
-
-    # Data-bearing cells. Emit raw <circle> so we can encode the SIZE channel
-    # directly in the radius attribute (4 discrete radii), on top of the 2×2
-    # jitter channel encoded in the translation. Size survives any blur; jitter
-    # survives low camera resolution. Combined: 4×4 = 16 levels per cell.
-    for i, pi in enumerate(data_pi.tolist()):
+    # Data cells at fixed positions (always rendered, SVG-free decode).
+    for i, pi in enumerate(_DATA_PI.tolist()):
         bx, by = _POS[pi]
         idx = float_to_idx(float(vector[i]))
         dx, dy = idx_to_jitter(idx)
@@ -370,9 +371,9 @@ def encode(vector: np.ndarray) -> str:
             "fill": FG,
         })
 
-    # Decorative cells (no id, no jitter).
-    for pi in filled.tolist():
-        if pi in data_set:
+    # Decorative cells: aesthetic filled cells not occupied by data.
+    for pi in np.argwhere(flat_grid != EMPTY).ravel().tolist():
+        if pi in _DATA_PI_SET:
             continue
         bx, by = _POS[pi]
         sym = SYMBOLS[int(flat_grid[pi])]

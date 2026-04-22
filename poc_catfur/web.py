@@ -12,17 +12,23 @@ Run:
 import base64
 import io
 import os
+import tempfile
 import time
 from functools import cache
 from pathlib import Path
 
 import numpy as np
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from PIL import Image
 from pydantic import BaseModel
 
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
 from . import decoder, distort, encoder, tokenize, vocab
+from . import shape_encoder as shape_enc
+from . import shape_scan_decoder as shape_sdec
 
 INDEX_HTML = (Path(__file__).parent / "templates" / "index.html").read_text(encoding="utf-8")
 
@@ -110,6 +116,46 @@ async def api_decode(image: UploadFile = File(...)) -> dict:
         "n_blobs": diag.get("n_blobs"),
         "uploaded_png": png_b64(img),
     }
+
+
+class ShapeEncodeRequest(BaseModel):
+    text: str
+
+
+@app.post("/api/shape/encode")
+def api_shape_encode(req: ShapeEncodeRequest) -> dict:
+    text = req.text.strip()
+    if not text:
+        raise HTTPException(400, "empty text")
+    try:
+        from openai import OpenAI
+        client = OpenAI()
+        resp = client.embeddings.create(model="text-embedding-ada-002", input=[text])
+        v = np.array(resp.data[0].embedding, dtype=np.float32)
+        v /= np.linalg.norm(v) + 1e-12
+        svg = shape_enc.encode(v)
+        b64 = "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
+        return {"ok": True, "svg_b64": b64, "svg": svg}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.post("/api/shape/decode")
+async def api_shape_decode(image: UploadFile = File(...)) -> dict:
+    data = await image.read()
+    try:
+        from .shape_vec2text import top_phrases
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+            f.write(data)
+            tmp = Path(f.name)
+        try:
+            v = shape_sdec.decode_image(tmp)
+        finally:
+            tmp.unlink(missing_ok=True)
+        phrases = top_phrases(v, n=10)
+        return {"ok": True, "phrases": phrases}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "phrases": []}
 
 
 def main() -> None:

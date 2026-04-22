@@ -151,7 +151,7 @@ def main() -> None:
     print(f"  dark-px fraction: render={dark_pre:.4f}  photo={dark_post:.4f}")
 
     print("Decoding scan…")
-    v_rt_scan = sdec.decode_image(photo_path, svg)
+    v_rt_scan = sdec.decode_image(photo_path)
     cos_scan_vs_orig = cosine(v_orig, v_rt_scan)
     cos_scan_vs_digital = cosine(v_rt_digital, v_rt_scan)
 
