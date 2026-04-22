@@ -80,6 +80,10 @@ async def api_shape_decode(image: UploadFile = File(...)) -> dict:
 
 def main() -> None:
     import uvicorn
+    print("Loading vec2text corrector...")
+    from .shape_vec2text import _get_corrector
+    _get_corrector()
+    print("Ready.")
     host = os.environ.get("CATFUR_HOST", "127.0.0.1")
     port = int(os.environ.get("CATFUR_PORT", "5050"))
     print(f"Serving at http://{host}:{port}")

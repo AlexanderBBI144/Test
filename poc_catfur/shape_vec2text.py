@@ -14,14 +14,13 @@ from __future__ import annotations
 import numpy as np
 
 _corrector = None
-_MODEL = "jxm/vec2text__openai_ada002__msmarco__msl128__corrector"
 
 
 def _get_corrector():
     global _corrector
     if _corrector is None:
         import vec2text
-        _corrector = vec2text.load_corrector(_MODEL)
+        _corrector = vec2text.load_pretrained_corrector("text-embedding-ada-002")
     return _corrector
 
 
@@ -31,7 +30,8 @@ def top_phrases(embedding: np.ndarray, n: int = 10) -> list[str]:
     import vec2text
 
     corrector = _get_corrector()
-    emb = torch.tensor(embedding, dtype=torch.float32).unsqueeze(0)
+    device = next(corrector.model.parameters()).device
+    emb = torch.tensor(embedding, dtype=torch.float32).unsqueeze(0).to(device)
     results = vec2text.invert_embeddings(
         embeddings=emb,
         corrector=corrector,
