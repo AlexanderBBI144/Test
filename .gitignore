@@ -8,3 +8,10 @@ dist/
 *.egg-info/
 poc_catfur/.cache/
 .venv/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+poc_catfur/out/
+.DS_Store
